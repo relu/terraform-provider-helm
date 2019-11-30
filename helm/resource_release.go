@@ -354,7 +354,6 @@ func resourceReleaseCreate(d *schema.ResourceData, meta interface{}) error {
 		return err
 	}
 
-	//
 	validInstallableChart, err := isChartInstallable(chart)
 	if !validInstallableChart {
 		return err
@@ -407,13 +406,20 @@ func resourceReleaseCreate(d *schema.ResourceData, meta interface{}) error {
 
 	debug("Installing Chart")
 
-	release, err := client.Run(chart, values)
+	rel, err := client.Run(chart, values)
 
-	if err != nil {
+	// Return error only if no release was created
+	// This will ensure we store even failed releases into the state
+	if err != nil && rel == nil {
+		return err
+	} else if err != nil && rel.Info.Status == release.StatusFailed {
+		if err := setIDAndMetadataFromRelease(d, rel); err != nil {
+			return err
+		}
 		return err
 	}
 
-	return setIDAndMetadataFromRelease(d, release)
+	return setIDAndMetadataFromRelease(d, rel)
 }
 
 func resourceReleaseUpdate(d *schema.ResourceData, meta interface{}) error {
