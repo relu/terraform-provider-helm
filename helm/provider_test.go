@@ -1,7 +1,9 @@
 package helm
 
 import (
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -59,10 +61,18 @@ func testAccPreCheck(t *testing.T, namespace string) {
 		createNamespace(t, namespace)
 	}
 
-	os.Setenv("HELM_REPOSITORY_CONFIG", "/Users/amell/Library/Preferences/helm/repositories.yaml")
-	os.Setenv("HELM_REPOSITORY_CACHE", "/Users/amell/Library/Caches/helm/repository")
-	os.Setenv("HELM_REGISTRY_CONFIG", "/Users/amell/Library/Preferences/helm/registry.json")
-	os.Setenv("HELM_PLUGINS", "/Users/amell/Library/helm/plugins")
+	helmdir, err := ioutil.TempDir(os.TempDir(), "helmhome")
+	defer os.RemoveAll(helmdir)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	os.Setenv("HELM_REPOSITORY_CONFIG", filepath.Join(helmdir, "config/repositories.yaml"))
+	os.Setenv("HELM_REPOSITORY_CACHE", filepath.Join(helmdir, "cache/helm/repository"))
+	os.Setenv("HELM_REGISTRY_CONFIG", filepath.Join(helmdir, "config/registry.json"))
+	os.Setenv("HELM_PLUGINS", filepath.Join(helmdir, "plugins"))
+	os.Setenv("XDG_CACHE_HOME", filepath.Join(helmdir, "cache"))
 	//os.Setenv("HELM_DEBUG", "true")
 	//os.Setenv("TF_LOG", "DEBUG")
 }
