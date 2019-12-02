@@ -457,8 +457,8 @@ func testAccHelmReleaseConfigBasic(resource, ns, name, version string) string {
 				value = false # persistent volumes are giving non-related issues when testing
 			}
 			set {
-				name = "slave.persistence.enabled"
-				value = false # persistent volumes are giving non-related issues when testing
+				name = "replication.enabled"
+				value = false
 			}
 		}
 	`, resource, name, ns, version)
