@@ -379,6 +379,18 @@ func (m *Meta) GetHelmConfiguration(namespace string) (*action.Configuration, er
 	actionConfig := new(action.Configuration)
 	cf := getKubernetesConfiguration(m.KubernetesConfig, namespace)
 
+	// Hack to prevent the kubernetes client from loading the local kubeconfig
+	// https://github.com/kubernetes/client-go/issues/718
+	if len(m.KubernetesConfig.KubeConfig) == 0 {
+		tmpkc, err := ioutil.TempFile(os.TempDir(), "stub-kubeconfig")
+		if err != nil {
+			return nil, err
+		}
+		defer os.Remove(tmpkc.Name())
+		f := tmpkc.Name()
+		cf.KubeConfig = &f
+	}
+
 	if err := actionConfig.Init(cf, namespace, m.HelmDriver, debug); err != nil {
 		return nil, err
 	}
