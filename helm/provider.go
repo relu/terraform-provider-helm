@@ -39,14 +39,7 @@ type Meta struct {
 	sync.Mutex
 }
 
-// RESTClientGetter gets the rest client
-type RESTClientGetter interface {
-	ToRESTConfig() (*rest.Config, error)
-	ToDiscoveryClient() (discovery.CachedDiscoveryInterface, error)
-	ToRESTMapper() (meta.RESTMapper, error)
-	ToRawKubeConfigLoader() clientcmd.ClientConfig
-}
-
+// KubeConfig is a RESTClientGetter interface implementation
 type KubeConfig struct {
 	ConfigData   *schema.ResourceData
 	clientConfig clientcmd.ClientConfig
