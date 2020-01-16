@@ -32,7 +32,6 @@ import (
 type Meta struct {
 	data       *schema.ResourceData
 	Settings   *cli.EnvSettings
-	KubeConfig *KubeConfig
 	HelmDriver string
 
 	// Used to lock some operations
@@ -42,6 +41,7 @@ type Meta struct {
 // KubeConfig is a RESTClientGetter interface implementation
 type KubeConfig struct {
 	ConfigData   *schema.ResourceData
+	Namespace    *string
 	clientConfig clientcmd.ClientConfig
 	lock         sync.Mutex
 }
@@ -79,6 +79,7 @@ func (k *KubeConfig) ToRawKubeConfigLoader() clientcmd.ClientConfig {
 	k.lock.Lock()
 	defer k.lock.Unlock()
 
+	// Always persist config
 	if k.clientConfig == nil {
 		k.clientConfig = k.toRawKubeConfigLoader()
 	}
@@ -98,27 +99,21 @@ func (k *KubeConfig) toRawKubeConfigLoader() clientcmd.ClientConfig {
 			}
 			loader.ExplicitPath = path
 
-			ctxSuffix := "; default context"
-
 			ctx, ctxOk := k8sGetOk(k.ConfigData, "config_context")
 			authInfo, authInfoOk := k8sGetOk(k.ConfigData, "config_context_auth_info")
 			cluster, clusterOk := k8sGetOk(k.ConfigData, "config_context_cluster")
 			if ctxOk || authInfoOk || clusterOk {
-				ctxSuffix = "; overriden context"
 				if ctxOk {
 					overrides.CurrentContext = ctx.(string)
-					ctxSuffix += fmt.Sprintf("; config ctx: %s", overrides.CurrentContext)
 					log.Printf("[DEBUG] Using custom current context: %q", overrides.CurrentContext)
 				}
 
 				overrides.Context = clientcmdapi.Context{}
 				if authInfoOk {
 					overrides.Context.AuthInfo = authInfo.(string)
-					ctxSuffix += fmt.Sprintf("; auth_info: %s", overrides.Context.AuthInfo)
 				}
 				if clusterOk {
 					overrides.Context.Cluster = cluster.(string)
-					ctxSuffix += fmt.Sprintf("; cluster: %s", overrides.Context.Cluster)
 				}
 				log.Printf("[DEBUG] Using overidden context: %#v", overrides.Context)
 			}
@@ -177,6 +172,12 @@ func (k *KubeConfig) toRawKubeConfigLoader() clientcmd.ClientConfig {
 			return nil
 		}
 		overrides.AuthInfo.Exec = exec
+	}
+
+	overrides.Context.Namespace = "default"
+
+	if k.Namespace != nil {
+		overrides.Context.Namespace = *k.Namespace
 	}
 
 	cfg := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loader, overrides)
@@ -417,7 +418,6 @@ func providerConfigure(d *schema.ResourceData, terraformVersion string) (interfa
 	}
 
 	m.Settings = settings
-	m.KubeConfig = &KubeConfig{ConfigData: d}
 
 	if v, ok := d.GetOk("helm_driver"); ok {
 		m.HelmDriver = v.(string)
@@ -478,7 +478,10 @@ func (m *Meta) GetHelmConfiguration(namespace string) (*action.Configuration, er
 
 	actionConfig := new(action.Configuration)
 
-	if err := actionConfig.Init(m.KubeConfig, namespace, m.HelmDriver, debug); err != nil {
+	kc := &KubeConfig{ConfigData: m.data}
+	kc.Namespace = &namespace
+
+	if err := actionConfig.Init(kc, namespace, m.HelmDriver, debug); err != nil {
 		return nil, err
 	}
 
